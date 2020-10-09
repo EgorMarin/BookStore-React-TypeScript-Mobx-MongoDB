@@ -49,7 +49,7 @@ router.post('/login', async (req, res) => {
 router.get('/profile', auth, async (req, res) => {
   try {
     const {userId} = req.user
-    const user = await User.findById(userId)
+    const user = await User.findById(userId).select('name country city address postal')
     res.json(user)
   } catch (error) {
     res.status(400).json(`Error: ${error}`)
@@ -60,13 +60,24 @@ router.post('/profile/edit', auth, async (req, res) => {
   try {
     const {userId} = req.user
     const user = await User.findById(userId)
-    const {country, city, address, postal} = req.body
+    const {name, country, city, address, postal} = req.body
+    if (name) user.country = name
     if (country) user.country = country
     if (city) user.city = city
     if (address) user.address = address
     if (postal) user.postal = postal
     await user.save()
-    res.json("You've edited your profile")
+    res.json({success: "You edited your profile"})
+  } catch (error) {
+    res.status(400).json(`Error: ${error}`)
+  }
+})
+
+router.delete('/profile/delete', auth, async (req, res) => {
+  try {
+    const {userId} = req.user
+    await User.findByIdAndDelete(userId)
+    res.json({success: "You deleted your profile"})
   } catch (error) {
     res.status(400).json(`Error: ${error}`)
   }
@@ -88,16 +99,17 @@ router.get('/cart', auth, async (req, res) => {
 router.post('/cart/add/:id', auth, async (req, res) => {
   try {
     const {userId} = req.user
-    const user = await User.findById(userId).select('cart')
-    const existed = user.cart.find(item => item.product.toString() === req.params.id)
+    const user = await (await User.findById(userId).populate('cart.product').select('cart')).execPopulate()
+    const existed = user.cart.find(item => item.product._id.toString() === req.params.id)
     if (existed) {
       existed.count++ 
       await user.save()
-      return res.json('Updated')
+      return res.json(user.cart)
     }
     user.cart = [...user.cart, {product: req.params.id}]
     await user.save()
-    res.json('Added')
+    const {cart} = await (await User.findById(userId).populate('cart.product').select('cart')).execPopulate()
+    res.json(cart)
   } catch (error) {
     res.status(400).json(`Error: ${error}`)
   }
@@ -106,16 +118,16 @@ router.post('/cart/add/:id', auth, async (req, res) => {
 router.post('/cart/remove/:id', auth, async (req, res) => {
   try {
     const {userId} = req.user
-    const user = await User.findById(userId).select('cart')
-    const existed = user.cart.find(item => item.product.toString() === req.params.id)
+    const user = await (await User.findById(userId).populate('cart.product').select('cart')).execPopulate()
+    const existed = user.cart.find(item => item.product._id.toString() === req.params.id)
     if (existed.count > 1) {
       existed.count-- 
       await user.save()
-      return res.json('Updated')
+      return res.json(user.cart)
     } 
-    user.cart = user.cart.filter(item => item.product.toString() !== req.params.id)
+    user.cart = user.cart.filter(item => item.product._id.toString() !== req.params.id)
     await user.save()
-    res.json('Removed')
+    res.json(user.cart)
   } catch (error) {
     res.status(400).json(`Error: ${error}`)
   }
@@ -124,10 +136,10 @@ router.post('/cart/remove/:id', auth, async (req, res) => {
 router.post('/cart/delete/:id', auth, async (req, res) => {
   try {
     const {userId} = req.user
-    const user = await User.findById(userId).select('cart')
-    user.cart = user.cart.filter(item => item.product.toString() !== req.params.id)
+    const user = await (await User.findById(userId).populate('cart.product').select('cart')).execPopulate()
+    user.cart = user.cart.filter(item => item.product._id.toString() !== req.params.id)
     await user.save()
-    res.json('Deleted')
+    res.json(user.cart)
   } catch (error) {
     res.status(400).json(`Error: ${error}`)
   }

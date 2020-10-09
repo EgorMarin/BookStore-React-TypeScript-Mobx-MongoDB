@@ -2,6 +2,7 @@ const {Router} = require('express')
 const router = Router()
 const User = require('../models/userModel')
 const Product = require('../models/productModel')
+const Order = require('../models/orderModel')
 const auth = require('../middlewares/verifyToken')
 const isAdmin = require('../middlewares/isAdmin')
 
@@ -65,14 +66,27 @@ router.post('/add/rate/:id', auth, async (req, res) => {
 
 router.post('/add/comment/:id', auth, async (req, res) => {
   try {
-    const {username} = req.user
-    const {text} = req.body
+    const {username, userId} = req.user
+    const {text, dateTime} = req.body
     if (!text) return res.json({error: "Field can't be empty!"})
     const existed = await Product.findById(req.params.id)
     if (!existed) return res.json({error: "Product doesn't exist"})
-    existed.comments = [...existed.comments, {userName: username, text}]
+    existed.comments = [...existed.comments, {userId, userName: username, text, dateTime}]
     await existed.save()
     res.json({success: "You added a new comment"})
+  } catch (error) {
+    res.status(400).json(`Error: ${error}`)
+  }
+})
+
+router.post('/delete/comment/:id', auth, async (req, res) => {
+  try {
+    const {commentId} = req.body
+    const existed = await Product.findById(req.params.id)
+    if (!existed) return res.json({error: "Product doesn't exist"})
+    existed.comments = existed.comments.filter(comment => comment._id.toString() !== commentId)
+    await existed.save()
+    res.json({success: "You deleted your comment"})
   } catch (error) {
     res.status(400).json(`Error: ${error}`)
   }
@@ -84,8 +98,17 @@ router.post('/add/comment/:id', auth, async (req, res) => {
 router.get('/self/products', auth, isAdmin, async (req, res) => {
   try {
     const {userId} = req.user
-    const {products} = await (await User.findById(userId).populate('products.product').select('products')).execPopulate()
+    const {products} = await (await User.findById(userId).populate('products.product').select('products.product')).execPopulate()
     res.json(products)
+  } catch (error) {
+    res.status(400).json(`Error: ${error}`)
+  }
+})
+
+router.get('/sold/:id', auth, isAdmin, async (req, res) => {
+  try {
+    const orders = await Order.find({productId: req.params.id})
+    res.json(orders)
   } catch (error) {
     res.status(400).json(`Error: ${error}`)
   }
@@ -126,7 +149,7 @@ router.post('/edit/:id', auth, isAdmin, async (req, res) => {
     if (price) existed.price = price
     if (count) existed.count = count
     await existed.save()
-    res.json("You edited your product")
+    res.json({success: "You edited your product"})
   } catch (error) {
     res.status(400).json(`Error: ${error}`)
   }
@@ -137,10 +160,10 @@ router.delete('/delete/:id', auth, isAdmin, async (req, res) => {
     const {userId} = req.user
     const existed = await Product.findById(req.params.id)
     if (!existed) return res.json({error: "Product doesn't exist"})
-    if (existed.owner.ownerId !== userId) return res.json({error: "You can't delete it because you aren't owner!"})
+    if (existed.owner.ownerId.toString() !== userId) return res.json({error: "You can't delete it because you aren't owner!"})
     const deleted = await Product.findByIdAndDelete(req.params.id)
     if (!deleted) return res.json({error: 'Oops! Smth went wrong with deleting this post...'})
-    res.json("You deleted your product")
+    res.json({success: `You deleted your product ${req.params.id}`})
   } catch (error) {
     res.status(400).json(`Error: ${error}`)
   }
