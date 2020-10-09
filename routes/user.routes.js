@@ -148,8 +148,6 @@ router.post('/cart/delete/:id', auth, async (req, res) => {
 router.post('/cart/purchase', auth, async (req, res) => {
   try {
     const {userId} = req.user
-    //  Card Payment Process
-    // if (success) do below code
     const user = await User.findById(userId).select('cart')
 
     user.cart.map(async (item) => {
